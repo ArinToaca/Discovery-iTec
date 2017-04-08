@@ -50,6 +50,7 @@ void sendCommand(char* s)
 
 void sendData(uint8_t cmd)
 {
+  digitalWrite(13,HIGH);
   noInterrupts(); // disable all interrupts
 
   TIMSK2 = 0;
@@ -100,11 +101,12 @@ void sendData(uint8_t cmd)
   sendSpace(0);
 
   TIMSK1 |= (1 << OCIE1A); //enable timer 1
+  digitalWrite(13,LOW);
 }
 
 ISR(TIMER1_COMPA_vect)          // interrupt service routine that wraps a user defined function supplied by attachInterrupt
 {
-    bool m = (PINE & (0x1 << 4))==0;
+    bool m = (PINH & (0x1 << 4))==0;
     
     switch(STATE)
     {
@@ -214,6 +216,7 @@ ISR(TIMER1_COMPA_vect)          // interrupt service routine that wraps a user d
 void setup() {
   pinMode(3, INPUT_PULLUP);
   pinMode(9, OUTPUT);
+  pinMode(13,OUTPUT);
   attachInterrupt(digitalPinToInterrupt(3),InterruptArin,RISING);
  
   date[0].symbol = "1";
@@ -262,7 +265,7 @@ void setup() {
   // initialize Timer1
   count=0;
   STATE = ST_START;
-  pinMode(2,INPUT);
+  pinMode(7,INPUT);
   
   noInterrupts(); // disable all interrupts
 
