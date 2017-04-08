@@ -13,7 +13,7 @@ int STATE;
   #define SYSCLOCK 16000000  // main Arduino clock
 #endif
 
-volatile int count,bitCount,spaceTimeCount,timeLength[100];
+volatile int count,bitCount,spaceTimeCount,timeLength[100],pushed;
 
 int stateCountLeg[4];
 typedef struct x{
@@ -23,19 +23,40 @@ typedef struct x{
 #define NR_DATE 20
 mapping date[NR_DATE];
 
+/*ISR(TIMER3_COMPA_vect)
+{
+  count++;
+  if(count==nextData)
+  {
+    count=0;
+    dataI++;
+    if(dataI==dataLen)
+    {
+      TIMSK3 ^= (1 << OCIE3A);
+    }
+    else
+    {
+      PORTH ^= 1 << 5;
+      nextData = data[dataI];
+    }
+  }
+}*/
+
 void sendBit(int micro)
 {
   TCCR2A |= _BV(COM2B1);
+  //micro-=300;
   delayMicroseconds(micro);
 }
 
 void sendSpace(int micro)
 {
   TCCR2A &= ~(_BV(COM2B1));
+ // micro-=300;
   delayMicroseconds(micro);
 }
 
-void sendData(uint8_t cmd)
+void sendData()
 {
   noInterrupts(); // disable all interrupts
 
@@ -46,47 +67,37 @@ void sendData(uint8_t cmd)
   TCCR2B = _BV(WGM22) | _BV(CS20);
   OCR2A = pwmval;
   OCR2B = pwmval / 3;
-
-  TIMSK1 &= ~(1 << OCIE1A);//disable time 1
   
   interrupts(); // enable all interrupts
 
+  uint8_t addr = 0x20;
+  uint8_t negAddr = ~addr;
+  uint8_t cmd = 0x22;
   uint8_t negCmd = ~cmd;
 
-  uint32_t sent = cmd;
-  sent <<= 8;
-  sent += 0x20DF0000 +negCmd;
-
-  //uint32_t sent = 0x20DF+(cmd<<8)+;
+  uint32_t sent = 0x20DF0000+(cmd<<8)+negCmd;
   Serial.println("Sending");
   Serial.println(sent,BIN);
+
+  delay(1000);
 
   sendBit(9000);
   sendSpace(4500);
 
+
+  
   int i;
-  //Serial.println("Bits:");
   for(i=31;i>=0;i--)
   {
     sendBit(562);
-    if(sent >= 0x80000000)
-    {
-      //Serial.print("1");
+    if((sent & (1<<i))!=0)
       sendSpace(1687);
-    }
     else
-    {
-      //Serial.print("0");
       sendSpace(562);
-    }
-
-    sent <<=1;
   }
 
   sendBit(562);
   sendSpace(0);
-
-  TIMSK1 |= (1 << OCIE1A); //enable timer 1
 }
 
 ISR(TIMER1_COMPA_vect)          // interrupt service routine that wraps a user defined function supplied by attachInterrupt
@@ -133,11 +144,11 @@ ISR(TIMER1_COMPA_vect)          // interrupt service routine that wraps a user d
 
         uint8_t addr,negAddr,cmd,negCmd;
 
-        /*Serial.println("Received");
+        Serial.println("Received");
         for(i=0;i<bitCount;i++)
         {
-          Serial.println("Length: "+String(timeLength[i]));
-        }*/
+          Serial.println("Length["+String(i)+"}:"+String(timeLength[i]));
+        }
 
         if(bitCount<5)
         {
@@ -173,7 +184,7 @@ ISR(TIMER1_COMPA_vect)          // interrupt service routine that wraps a user d
 
           if(i%8==0)
           {
-            //Serial.println(final_output,BIN);
+            Serial.println(final_output,BIN);
             final_output = 0;
           }
         }
@@ -195,6 +206,8 @@ ISR(TIMER1_COMPA_vect)          // interrupt service routine that wraps a user d
           else
             Serial.println("Data not so ok");
         } 
+
+        Serial.println("---------------------------");
       break;
     }
 }
@@ -252,9 +265,6 @@ void setup() {
   pinMode(2,INPUT);
   
   noInterrupts(); // disable all interrupts
-
-  //timer 1 is used for RF reading
-  
   TCCR1A = 0;
   TCCR1B = 0;
   TCNT1 = 0;
@@ -264,33 +274,17 @@ void setup() {
   TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
 
   count=0;
-
-  //timer 2 is used for RF writing
-
-    TIMSK2 = 0;
-
-  const uint8_t pwmval = 16000000 / 2000 / 38;
-  TCCR2A = _BV(WGM20);
-  TCCR2B = _BV(WGM22) | _BV(CS20);
-  OCR2A = pwmval;
-  OCR2B = pwmval / 3;
-
-  sendSpace(0);
   
   interrupts(); // enable all interrupts
 }
 
 void InterruptArin(){
-  static unsigned long last_irq = 0;
-   unsigned long interrupt_time = millis();
-   
-   // If interrupts come faster than 200ms, assume it's a bounce and ignore
-   if (interrupt_time - last_irq > 200) 
-   {
-     Serial.println("Blup in data mea!");
-     sendData(0x88);
-   }
-   last_irq = interrupt_time;
+  if(pushed)
+    return;
+  pushed=1;
+  Serial.println("Bloop in data mea");
+  sendData();
+  pushed=0;
 }
 void loop() {
   //sendData();

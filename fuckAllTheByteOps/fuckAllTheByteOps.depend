@@ -1,0 +1,6 @@
+# depslib dependency file v1.0
+1491674427 source:c:\users\teny9\desktop\discovery-itec\fuckallthebyteops\main.c
+	<stdio.h>
+	<stdlib.h>
+	<inttypes.h>
+
