@@ -18,7 +18,7 @@ volatile int count,bitCount,spaceTimeCount,timeLength[100];
 int stateCountLeg[4];
 typedef struct x{
   char *symbol;
-  int val;
+  uint8_t val;
 } mapping;
 #define NR_DATE 20
 mapping date[NR_DATE];
@@ -33,6 +33,19 @@ void sendSpace(int micro)
 {
   TCCR2A &= ~(_BV(COM2B1));
   delayMicroseconds(micro);
+}
+
+void sendCommand(char* s)
+{
+  //Serial.println("Data ok");
+  int j;
+  for(j = 0; j < NR_DATE; j++){
+    if(strcmp(s, date[j].symbol)==0){
+      Serial.println("Sending command: "+String(date[j].symbol)+"; code: "+String(date[j].val));
+      sendData(date[j].val);
+      break;
+    }
+  }
 }
 
 void sendData(uint8_t cmd)
@@ -58,8 +71,8 @@ void sendData(uint8_t cmd)
   sent += 0x20DF0000 +negCmd;
 
   //uint32_t sent = 0x20DF+(cmd<<8)+;
-  Serial.println("Sending");
-  Serial.println(sent,BIN);
+  //Serial.println("Sending");
+  //Serial.println(sent,BIN);
 
   sendBit(9000);
   sendSpace(4500);
@@ -288,11 +301,25 @@ void InterruptArin(){
    if (interrupt_time - last_irq > 200) 
    {
      Serial.println("Blup in data mea!");
-     sendData(0x88);
+     sendData(0x40);
    }
    last_irq = interrupt_time;
 }
+
 void loop() {
-  //sendData();
-  delay(1000);
+  if(Serial.available())
+  {
+    delay(50);
+    char * s=malloc(sizeof(char)*20);
+    uint8_t t = 0;
+    while(Serial.available())
+    {
+      s[t++]=(char)Serial.read();
+      if(t==19)
+        break;
+    }
+    s[t] = '\0';
+    Serial.println("Code read: "+String(s));
+    sendCommand(s);
+  }
 }
