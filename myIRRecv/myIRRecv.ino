@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <CalinMotion.h>
 
 #define ST_START 1
 #define ST_MARK 2
@@ -6,6 +7,8 @@
 #define ST_STOP 4
 
 int STATE;
+
+CalinMotion cm;
 
 #ifdef F_CPU
   #define SYSCLOCK F_CPU     // main Arduino clock
@@ -218,6 +221,9 @@ void setup() {
   pinMode(9, OUTPUT);
   pinMode(13,OUTPUT);
   attachInterrupt(digitalPinToInterrupt(3),InterruptArin,RISING);
+
+  cm = CalinMotion();
+  cm.Init();
  
   date[0].symbol = "1";
   date[0].val = 0x88;
@@ -325,4 +331,17 @@ void loop() {
     Serial.println("Code read: "+String(s));
     sendCommand(s);
   }
+
+  int a = cm.DoStuff();
+  switch(a)
+  {
+    case 11:
+      sendData(0xC0);//vol down
+    break;
+
+    case 12:
+      sendData(0x40);//vol up
+    break;
+  }
+  delay(500);
 }
