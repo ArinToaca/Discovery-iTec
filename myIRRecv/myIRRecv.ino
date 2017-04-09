@@ -23,7 +23,7 @@ typedef struct x{
   char *symbol;
   uint8_t val;
 } mapping;
-#define NR_DATE 20
+#define NR_DATE 22
 mapping date[NR_DATE];
 
 void sendBit(int micro)
@@ -49,6 +49,57 @@ void sendCommand(char* s)
       break;
     }
   }
+}
+
+void sendSonyPower()
+{
+  digitalWrite(13,HIGH);
+  noInterrupts(); // disable all interrupts
+
+  TIMSK2 = 0;
+
+  const uint8_t pwmval = 16000000 / 2000 / 40;
+  TCCR2A = _BV(WGM20);
+  TCCR2B = _BV(WGM22) | _BV(CS20);
+  OCR2A = pwmval;
+  OCR2B = pwmval / 3;
+
+  TIMSK1 &= ~(1 << OCIE1A);//disable time 1
+  
+  interrupts(); // enable all interrupts
+
+  //uint32_t sent = 0x20DF+(cmd<<8)+;
+  //Serial.println("Sending");
+  //Serial.println(sent,BIN);
+
+  sendBit(2400);
+  sendSpace(600);
+
+  uint16_t sent = 0xA900;
+
+  int i;
+  Serial.println("Bits:");
+  for(i=11;i>=0;i--)
+  {
+    if(sent >= 0x8000)
+    {
+      //Serial.print("1");
+      sendBit(1200);
+    }
+    else
+    {
+      //Serial.print("0");
+      sendBit(600);
+    }
+    sendSpace(600);
+
+    sent <<=1;
+  }
+
+  sendSpace(0);
+
+  TIMSK1 |= (1 << OCIE1A); //enable timer 1
+  digitalWrite(13,LOW);
 }
 
 void sendData(uint8_t cmd)
@@ -195,6 +246,9 @@ ISR(TIMER1_COMPA_vect)          // interrupt service routine that wraps a user d
             final_output = 0;
           }
         }
+
+        Serial.println(cmd,HEX);
+        
         int j;
         if((addr&negAddr)==0 && (cmd&negCmd)==0)
         {
@@ -265,6 +319,10 @@ void setup() {
   date[18].val = 0xE0; 
   date[19].symbol = "RIGHT"; 
   date[19].val = 0x60;
+  date[20].symbol = "MENU"; 
+  date[20].val = 0xC2;
+  date[21].symbol = "EXIT"; 
+  date[21].val = 0xDA;
   
   Serial.begin(9600);
   // put your setup code here, to run once:
@@ -300,6 +358,8 @@ void setup() {
   sendSpace(0);
   
   interrupts(); // enable all interrupts
+
+  Serial3.begin(9600);
 }
 
 void InterruptArin(){
@@ -309,8 +369,14 @@ void InterruptArin(){
    // If interrupts come faster than 200ms, assume it's a bounce and ignore
    if (interrupt_time - last_irq > 200) 
    {
-     Serial.println("Blup in data mea!");
-     sendData(0x40);
+     sendData(0x10);
+     delay(250);
+     int k;
+     for(k=0;k<3;k++)
+     {
+       sendSonyPower();
+       delay(45);
+     }
    }
    last_irq = interrupt_time;
 }
@@ -332,9 +398,41 @@ void loop() {
     sendCommand(s);
   }
 
+  if(Serial3.available())
+  {
+    delay(50);
+    char * s=malloc(sizeof(char)*20);
+    uint8_t t = 0;
+    while(Serial3.available())
+    {
+      s[t++]=(char)Serial3.read();
+      if(t==19)
+        break;
+    }
+    s[t] = '\0';
+    Serial.println("Code read: "+String(s));
+    sendCommand(s);
+  }
+
   int a = cm.DoStuff();
   switch(a)
   {
+    case 1:
+      sendData(0xe0);//left
+    break;
+
+    case 2:
+      sendData(0x60);//right
+    break;
+    
+    case 3:
+      sendData(0x2);//up
+    break;
+
+    case 4:
+      sendData(0x82);//down
+    break;
+    
     case 11:
       sendData(0xC0);//vol down
     break;
@@ -343,5 +441,6 @@ void loop() {
       sendData(0x40);//vol up
     break;
   }
-  delay(500);
+  
+  delay(100);
 }
