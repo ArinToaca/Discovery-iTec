@@ -86,8 +86,6 @@ void setup() {
 
 
 void loop() {
-  if (Serial.read() != -1) {
-    sendData(0x88);
-    delay(40);
-  }
+  sendData(0xC0);
+  delay(1000);
 }
